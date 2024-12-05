@@ -85,20 +85,16 @@ router.get('/results', async (req, res) => {
     }
 
     try {
-        // Dynamically construct JSON for --expression-attribute-values
-        const expressionAttributeValues = JSON.stringify({
-            ":userId": { "S": userId }
-        }).replace(/"/g, '\\"'); // Escape double quotes for AWS CLI
-
-        // Construct the query command with properly escaped JSON
+        // Construct the query command
         const queryCommand = `aws dynamodb query --table-name Results --region eu-north-1 --key-condition-expression "userId = :userId" --expression-attribute-values "{\\":userId\\":{\\"S\\":\\"${userId}\\"}}" --output json`;
 
         console.log('Executing queryCommand:', queryCommand);
 
         const result = await executeCommand(queryCommand);
 
-        // Parse and format the results
-        const items = JSON.parse(result).Items.map((item) => ({
+        const parsedResult = JSON.parse(result);
+
+        const items = parsedResult.Items.map((item) => ({
             userId: item.userId.S,
             timestamp: item.timestamp.S,
             score: parseInt(item.score.N),
@@ -111,6 +107,8 @@ router.get('/results', async (req, res) => {
     }
 });
 
+
+
 router.get('/results/all', async (req, res) => {
     try {
         const scanCommand = `aws dynamodb scan --table-name Results --region eu-north-1 --output json`;
@@ -119,7 +117,6 @@ router.get('/results/all', async (req, res) => {
 
         const result = await executeCommand(scanCommand);
 
-        // Parse and format the results
         const items = JSON.parse(result).Items.map((item) => ({
             userId: item.userId.S,
             timestamp: item.timestamp.S,
