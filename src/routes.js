@@ -111,6 +111,29 @@ router.get('/results', async (req, res) => {
     }
 });
 
+router.get('/results/all', async (req, res) => {
+    try {
+        // Construct the scan command to fetch all items
+        const scanCommand = `aws dynamodb scan --table-name Results --region eu-north-1 --output json`;
+
+        console.log('Executing scanCommand:', scanCommand);
+
+        const result = await executeCommand(scanCommand);
+
+        // Parse and format the results
+        const items = JSON.parse(result).Items.map((item) => ({
+            userId: item.userId.S,
+            timestamp: item.timestamp.S,
+            score: parseInt(item.score.N),
+        }));
+
+        res.json(items);
+    } catch (error) {
+        console.error('Error fetching all results:', error);
+        res.status(500).json({ error: 'Failed to fetch all results', details: error.message || error });
+    }
+});
+
 
 
 module.exports = router;
