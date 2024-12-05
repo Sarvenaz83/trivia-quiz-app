@@ -113,7 +113,6 @@ router.get('/results', async (req, res) => {
 
 router.get('/results/all', async (req, res) => {
     try {
-        // Construct the scan command to fetch all items
         const scanCommand = `aws dynamodb scan --table-name Results --region eu-north-1 --output json`;
 
         console.log('Executing scanCommand:', scanCommand);
@@ -134,6 +133,47 @@ router.get('/results/all', async (req, res) => {
     }
 });
 
+
+router.delete('/results/delete', async (req, res) => {
+    const { userId } = req.body;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+        // Query to find all results for the userId
+        const queryCommand = `aws dynamodb query --table-name Results --region eu-north-1 --key-condition-expression "userId = :userId" --expression-attribute-values "{\\":userId\\":{\\"S\\":\\"${userId}\\"}}" --output json`;
+
+        console.log('Executing queryCommand:', queryCommand);
+        const queryResult = await executeCommand(queryCommand);
+
+        // Parse results
+        const items = JSON.parse(queryResult).Items;
+
+        if (items.length === 0) {
+            return res.status(404).json({ message: 'No results found for the specified userId.' });
+        }
+
+        // Delete each item
+        for (const item of items) {
+            const key = JSON.stringify({
+                userId: { S: item.userId.S },
+                timestamp: { S: item.timestamp.S },
+            }).replace(/"/g, '\\"'); // Escape quotes for AWS CLI
+
+            const deleteCommand = `aws dynamodb delete-item --table-name Results --region eu-north-1 --key "${key}"`;
+
+            console.log('Executing deleteCommand:', deleteCommand);
+            await executeCommand(deleteCommand);
+        }
+
+        res.json({ message: `All results for userId ${userId} have been deleted.` });
+    } catch (error) {
+        console.error('Error deleting results:', error);
+        res.status(500).json({ error: 'Failed to delete results', details: error.message || error });
+    }
+});
 
 
 module.exports = router;
