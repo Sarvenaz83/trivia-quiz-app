@@ -32,7 +32,6 @@ router.post('/submit', async (req, res) => {
     try {
         console.log('Request received:', { userId, answers });
 
-        // 1. Fetch questions from DynamoDB
         const getQuestionsCommand = `aws dynamodb scan --table-name Questions --output json --region eu-north-1`;
         console.log('Executing command:', getQuestionsCommand);
         const result = await executeCommand(getQuestionsCommand);
@@ -43,7 +42,6 @@ router.post('/submit', async (req, res) => {
             correctAnswer: parseInt(item.correctAnswer.N),
         }));
 
-        // 2. Calculate the score
         let score = 0;
         questions.forEach((q, index) => {
             if (answers[index] !== undefined && answers[index] === q.correctAnswer) {
@@ -52,11 +50,9 @@ router.post('/submit', async (req, res) => {
         });
         console.log('Score calculated:', score);
 
-        // 3. Generate timestamp
         const timestamp = new Date().toISOString();
         console.log('Generated timestamp:', timestamp);
 
-        // 4. Format data for DynamoDB
         const dynamoDBItem = {
             userId: { S: userId },
             timestamp: { S: timestamp },
@@ -72,14 +68,46 @@ router.post('/submit', async (req, res) => {
         console.log('SaveResultCommand:', saveResultCommand);
 
 
-        // 5. Save result in Results table
         await executeCommand(saveResultCommand);
 
-        // 6. Return response
         res.json({ userId, score, timestamp });
     } catch (error) {
         console.error('Error during submission:', error);
         res.status(500).json({ error: 'Failed to submit answers', details: error.message || error });
+    }
+});
+
+router.get('/results', async (req, res) => {
+    const { userId } = req.query;
+
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
+    }
+
+    try {
+        // Dynamically construct JSON for --expression-attribute-values
+        const expressionAttributeValues = JSON.stringify({
+            ":userId": { "S": userId }
+        }).replace(/"/g, '\\"'); // Escape double quotes for AWS CLI
+
+        // Construct the query command with properly escaped JSON
+        const queryCommand = `aws dynamodb query --table-name Results --region eu-north-1 --key-condition-expression "userId = :userId" --expression-attribute-values "{\\":userId\\":{\\"S\\":\\"${userId}\\"}}" --output json`;
+
+        console.log('Executing queryCommand:', queryCommand);
+
+        const result = await executeCommand(queryCommand);
+
+        // Parse and format the results
+        const items = JSON.parse(result).Items.map((item) => ({
+            userId: item.userId.S,
+            timestamp: item.timestamp.S,
+            score: parseInt(item.score.N),
+        }));
+
+        res.json(items);
+    } catch (error) {
+        console.error('Error fetching results:', error);
+        res.status(500).json({ error: 'Failed to fetch results', details: error.message || error });
     }
 });
 
