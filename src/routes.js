@@ -175,5 +175,42 @@ router.delete('/results/delete', async (req, res) => {
     }
 });
 
+router.put('/results/update', async (req, res) => {
+    const { userId, timestamp, newScore } = req.body;
+
+    if (!userId || !timestamp || newScore === undefined) {
+        return res.status(400).json({
+            error: 'userId, timestamp, and newScore are required fields',
+        });
+    }
+
+    try {
+        // Construct the update-item command
+        const updateCommand = `
+            aws dynamodb update-item \
+            --table-name Results \
+            --region eu-north-1 \
+            --key '{"userId": {"S": "${userId}"}, "timestamp": {"S": "${timestamp}"}}' \
+            --update-expression "SET #score = :newScore" \
+            --expression-attribute-names '{"#score": "score"}' \
+            --expression-attribute-values '{":newScore": {"N": "${newScore}"}}'`;
+
+        console.log('Executing updateCommand:', updateCommand);
+
+        await executeCommand(updateCommand);
+
+        res.json({
+            message: `Result updated successfully for userId ${userId} at timestamp ${timestamp}`,
+        });
+    } catch (error) {
+        console.error('Error updating result:', error);
+        res.status(500).json({
+            error: 'Failed to update result',
+            details: error.message || error,
+        });
+    }
+});
+
+
 
 module.exports = router;
